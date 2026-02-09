@@ -84,6 +84,10 @@ AVAILABLE_ENVIRONMENTS: Dict[str, Dict[str, Type[Environment]]] = {
         "enter_castle": DejaVuEnterCastleEnv,
         "test": DejaVuTestEnvironment,
     },
+    "legend_of_zelda": {
+        "dummy": DummyEnvironment,
+        "default": DummyEnvironment,
+    }
 }
 
 AVAILABLE_CONTROLLERS: Dict[str, Dict[str, Type[Controller]]] = {
@@ -104,9 +108,6 @@ AVAILABLE_CONTROLLERS: Dict[str, Dict[str, Type[Controller]]] = {
     },
     "pokemon_fools_gold": {
         "state_wise": PokemonStateWiseController,
-    },
-    "deja_vu": {
-        "state_wise": DejaVuStateWiseController,
     },
 }
 
