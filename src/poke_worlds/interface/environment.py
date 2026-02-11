@@ -269,7 +269,7 @@ class Environment(gym.Env, ABC):
         """ The Environment History, storing all observations, state_information reports, actions and rewards over the episode. Is cleared with reset(). Access through get_history()"""
         self._environment_override_video_text = environment_override_video_text
         """ Whether to augment the emulator video saving with high level action strings. """
-        self.reset()
+        self.reset() # I don't think this will cause issues, but should check that resetting here works well with gymnasium SyncVectorEnv final_obs construction. 
 
     def get_history(self) -> History:
         """
