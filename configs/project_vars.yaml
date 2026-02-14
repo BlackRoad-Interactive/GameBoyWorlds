@@ -11,5 +11,5 @@ executor_max_steps: 15
 text_embedding_model: Qwen/Qwen3-Embedding-0.6B
 text_embedding_model_kind: qwen3
 text_embedding_model_max_length: 512
-image_embedding_model: jinaai/jina-embeddings-v4
+image_embedding_model: random_patch
 image_embedding_model_kind: random_patch

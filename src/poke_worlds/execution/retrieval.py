@@ -146,7 +146,8 @@ class HuggingFaceEmbeddingEngine(ABC):
                 return
         else:
             log_info(
-                f"Loading HuggingFace VLM model: {model_name}", _project_parameters
+                f"Loading HuggingFace VLM model: {model_name} | {model_kind}",
+                _project_parameters,
             )
             model, processor = engine_class._do_start(model_kind, model_name)
             HuggingFaceEmbeddingEngine.MODEL_REGISTRY[model_name] = (
