@@ -13,6 +13,7 @@ from poke_worlds.interface.environment import (
     DummyEnvironment,
     Environment,
     TestEnvironmentMixin,
+    TrainEnvironmentMixin,
 )
 from poke_worlds.interface.controller import Controller
 
@@ -45,8 +46,11 @@ class PokemonOCREnvironment(PokemonEnvironment):
         return emulator_kwargs
 
 
-
 class PokemonTestEnvironment(TestEnvironmentMixin, PokemonOCREnvironment):
+    pass
+
+
+class PokemonTrainEnvironment(TrainEnvironmentMixin, PokemonOCREnvironment):
     pass
 
 
@@ -64,7 +68,7 @@ class PokemonRedStarterChoiceEnvironment(PokemonOCREnvironment):
         Environment.override_state_tracker_class(
             emulator_kwargs, PokemonRedStarterTracker
         )
-        emulator_kwargs["init_state"] = "test_starter_easy"
+        emulator_kwargs["init_state"] = "starter"
         return emulator_kwargs
 
     def determine_terminated(
@@ -98,6 +102,8 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
     Reward the agent for choosing Charmander as quickly as possible.
     """
 
+    STEP_WISE_REWARD = False
+
     def determine_reward(
         self,
         start_state,
@@ -118,7 +124,7 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
         starter_chosen = current_state["pokemon_red_starter"]["current_starter"]
         n_steps = current_state["core"]["steps"]
         if starter_chosen is None:
-            if action == LowLevelAction and False:
+            if action == LowLevelAction and self.STEP_WISE_REWARD:
                 if "low_level_action" in action_kwargs:
                     # reward for pressing A, penalty for pressing anything else
                     low_level_action = action_kwargs["low_level_action"]
@@ -130,13 +136,37 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
                 return -1.0  # Penalty for not choosing a starter within max steps
             else:
                 return 0.0
-        step_bonus = 100 / (n_steps + 1)
+        step_bonus = min(0.25 / (n_steps + 1), 0.5)
         if starter_chosen == "charmander":
-            return 500.0 + step_bonus
+            return 0.5 + step_bonus
         else:
             return (
-                100.0 + step_bonus
+                0.25 + step_bonus
             )  # Penalty for choosing the wrong starter. For now, just less reward.
+
+
+class PokemonRedChooseCharmanderEasyEnvironment(PokemonRedChooseCharmanderEnvironment):
+    def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
+        """
+        Override default emulator keyword arguments for this environment.
+        """
+        Environment.override_state_tracker_class(
+            emulator_kwargs, PokemonRedStarterTracker
+        )
+        emulator_kwargs["init_state"] = "test_starter_easy"
+        return emulator_kwargs
+
+
+class PokemonRedChooseCharmanderHardEnvironment(PokemonRedChooseCharmanderEnvironment):
+    def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
+        """
+        Override default emulator keyword arguments for this environment.
+        """
+        Environment.override_state_tracker_class(
+            emulator_kwargs, PokemonRedStarterTracker
+        )
+        emulator_kwargs["init_state"] = "test_starter_hard"
+        return emulator_kwargs
 
 
 class PokemonRedExploreStartingSceneEnvironment(PokemonRedStarterChoiceEnvironment):
@@ -165,10 +195,11 @@ class PokemonRedExploreStartingSceneEnvironment(PokemonRedStarterChoiceEnvironme
             return 0.0  # first frame
         novelty_score = 1.0 - float((similarity_scores.max()).item())
         return novelty_score
-    
+
     def reset(
-            self, *, seed: Optional[int] = None, options: Optional[dict] = None
-        ) -> Tuple[Any, Dict]:
+        self, *, seed: Optional[int] = None, options: Optional[dict] = None
+    ) -> Tuple[Any, Dict]:
         from poke_worlds.execution.retrieval import Index
+
         self._visual_index = Index(modality="image")
         return super().reset(seed=seed, options=options)

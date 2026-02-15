@@ -22,6 +22,8 @@ There are two ways to navigate the documentation:
 
 
 ### Notable API Imports
+** Utils Submodule:**
+* `get_benchmark_tasks`: Function to get benchmark tasks for evaluating agents in different game variants.
 
 **Emulation Submodule:**
 * `AVAILABLE_GAMES`: List of available game variants supported by the package.
@@ -31,7 +33,6 @@ There are two ways to navigate the documentation:
 
 **Interface Submodule:**
 * `get_environment`: Factory function to get an environment instance for a specified game variant and environment variant.
-* `get_benchmark_tasks`: Function to get benchmark tasks for evaluating agents in different game variants.
 * `get_test_environment`: Function to create a test environment based on a benchmark task.
 * `get_training_environments_kwargs`: Function to get keyword arguments for creating training environments for a specified game variant.
 * `get_shifted_environments_kwargs`: Function to get keyword arguments for creating shifted environments for domain adaptation experiments.
@@ -41,6 +42,8 @@ There are two ways to navigate the documentation:
 
 """
 
+from poke_worlds.utils import get_benchmark_tasks
+
 from poke_worlds.emulation.registry import (
     AVAILABLE_GAMES,
     get_emulator,
@@ -48,7 +51,6 @@ from poke_worlds.emulation.registry import (
 )
 from poke_worlds.interface.registry import (
     get_environment,
-    get_benchmark_tasks,
     get_test_environment,
     get_training_environments_kwargs,
     get_shifted_environments_kwargs,

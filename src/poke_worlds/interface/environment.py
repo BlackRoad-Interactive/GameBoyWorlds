@@ -13,7 +13,10 @@ from poke_worlds.utils import (
 
 
 from poke_worlds.emulation import Emulator, StateTracker, TestTrackerMixin
-from poke_worlds.emulation.registry import get_state_tracker_class
+from poke_worlds.emulation.registry import (
+    get_state_tracker_class,
+    get_train_init_states,
+)
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
 
@@ -255,6 +258,7 @@ class Environment(gym.Env, ABC):
                 self._parameters,
             )
         self._controller.assign_emulator(self._emulator)
+        self._rng = np.random.default_rng()
         self.action_space = self._controller.get_action_space()
         """ The Gym action Space provided by the controller. """
         self.actions = self._controller.ACTIONS
@@ -269,7 +273,7 @@ class Environment(gym.Env, ABC):
         """ The Environment History, storing all observations, state_information reports, actions and rewards over the episode. Is cleared with reset(). Access through get_history()"""
         self._environment_override_video_text = environment_override_video_text
         """ Whether to augment the emulator video saving with high level action strings. """
-        self.reset()
+        self.reset()  # I don't think this will cause issues, but should check that resetting here works well with gymnasium SyncVectorEnv final_obs construction.
 
     def get_history(self) -> History:
         """
@@ -391,7 +395,7 @@ class Environment(gym.Env, ABC):
         """
         super().reset(seed=seed, options=options)
         self._emulator.reset()
-        self._controller.seed(seed)
+        self.seed(seed)
         observation, info = self.get_observation(), self.get_info()
         self._history = History(observation=observation, info=info)
         return observation, info
@@ -710,6 +714,7 @@ class Environment(gym.Env, ABC):
             seed (int, optional): The seed value.
         """
         self._controller.seed(seed)
+        self._rng = np.random.default_rng(seed)
 
     def render_obs(
         self,
@@ -877,19 +882,21 @@ class DummyEnvironment(Environment):
         """
         screen_shape = emulator.screen_shape
         self.observation_space = gym.spaces.Box(
-            low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8
+            low=0, high=255, shape=(screen_shape[1], screen_shape[0]), dtype=np.uint8
         )
         """ The observation space is the raw pixel values of the emulator's screen. """
         super().__init__(
             emulator=emulator, controller=controller, parameters=parameters
         )
 
-    def get_observation(self,
+    def get_observation(
+        self,
         *,
         action=None,
         action_kwargs=None,
         transition_states=None,
-        action_success=None):
+        action_success=None,
+    ):
         if transition_states is None:
             current_state = self.get_info()
             screen = current_state["core"]["current_frame"]
@@ -1004,3 +1011,30 @@ class TestEnvironmentMixin:
                 any_terminated = True
                 break
         return any_terminated
+
+
+class TrainEnvironmentMixin:
+    """
+    Mixin class for training environments.
+    Records the allowed initial states for training and random shuffles between them when resetting.
+    """
+
+    def reset(
+        self, *, seed: Optional[int] = None, options: Optional[dict] = None
+    ) -> Tuple[gym.spaces.Space, Dict[str, Dict[str, Any]]]:
+        """
+
+        Args:
+            seed (int, optional): Seed for random number generators.
+            options (dict, optional): Additional options for resetting the environment.
+        Returns:
+            observation (object): The initial observation of the environment.
+
+            info (dict): Additional information about the reset.
+        """
+        game = self._emulator.game
+        init_states = get_train_init_states(game, parameters=self._parameters)
+        choice = self._rng.choice(len(init_states))
+        init_state = init_states[choice]
+        self._emulator.set_init_state(init_state)
+        return super().reset(seed=seed, options=options)

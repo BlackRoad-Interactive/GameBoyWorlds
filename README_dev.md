@@ -23,7 +23,8 @@ See the [API documentation](https://dhananjayashok.github.io/PokeWorlds/) to und
   - [Descriptive State and Event Tracking](#I-want-to-track-fine-grained-details)
   - [Reward Engineering](#I-want-to-engineer-my-own-reward-functions)
   - [Adding New ROMs](#I-want-to-add-a-new-ROM-Hack)
-  - [Adding New Test Tasks]
+  - [Adding New Test Tasks] # TODO
+  - [Useful things](#useful-things)
 
 ### I want to create my own starting states
 Easy. The only question is whether you want to save an mGBA state (perhaps you use cheats to lazily put the agent in a very specific state) or save a PyBoy state directly (i.e. you start from an existing state and play to the new state).
@@ -196,4 +197,13 @@ python dev/test_play.py --game <game> --state_tracker_class <your_tracker_name> 
 The game should automatically stop when you reach the termination/truncation condition.
 
 *Example video: [here](https://drive.google.com/file/d/1j5u8N1OFm45pa6sf3aGnXxfFyYaDt8Ei/view?usp=sharing)*
+
+
+### Useful Things
+
+* `demos/environment.py`: You can specify a game, environment_variant or controller_variant to test parsing, HighLevelActions etc.
+
+Everything in `dev`:
+* `dev_play.py`: vital for being able to play the game, pause the game and capture the screen or enter a breakpoint. 
+* `list_states.py`: prints out all of the states you've saved so far and writes them to `tmp_state_list.csv`
 

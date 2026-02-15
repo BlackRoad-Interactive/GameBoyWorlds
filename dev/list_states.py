@@ -17,16 +17,14 @@ def list_states(game):
     if len(states) == 0:
         log_error(f"No available states found for game {game}.")
     state_dict = {"base": []}
-    for state_file in states:
-        if state_file.endswith(".state"):
-            state_name = state_file[:-6]
-            if "_" in state_name:
-                base_name = state_name.split("_")[0]
-            else:
-                base_name = "base"
-            if base_name not in state_dict:
-                state_dict[base_name] = []
-            state_dict[base_name].append(state_name)
+    for state_name in states:
+        if "_" in state_name:
+            base_name = state_name.split("_")[0]
+        else:
+            base_name = "base"
+        if base_name not in state_dict:
+            state_dict[base_name] = []
+        state_dict[base_name].append(state_name)
     for key in state_dict:
         state_dict[key].sort()
     format_str = f"Available states for game {game}:"

@@ -109,6 +109,8 @@ def main(
             plt.ylabel("Reward")
             plt.title("Rewards over Time")
             plt.show()
+        else:
+            print(f"Episode finished after {steps} steps with total reward {sum(rewards)}")
     else:
         show_obs = show_mode == "obs"
         show_info = not show_obs

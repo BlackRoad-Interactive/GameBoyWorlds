@@ -136,3 +136,25 @@ def get_benchmark_tasks_df(parameters: dict = None) -> pd.DataFrame:
     tasks_filepath = os.path.join(project_root, "benchmark_tests", "tasks.csv")
     tasks_df = pd.read_csv(tasks_filepath)
     return tasks_df
+
+
+def get_benchmark_tasks(game: str, parameters: dict = None) -> pd.DataFrame:
+    """
+    Loads the benchmark tasks for the specified game from the benchmark_tests/tasks.csv file
+
+    Args:
+        game (str): The variant of the game to get benchmark tasks for.
+        parameters (dict, optional): Additional parameters for error logging.
+
+    Returns:
+        pd.DataFrame: DataFrame containing the benchmark tasks for the specified game.
+    """
+    parameters = load_parameters(parameters)
+    tasks_df = get_benchmark_tasks_df(parameters)
+    game_tasks_df = tasks_df[tasks_df["game"] == game]
+    if len(game_tasks_df) == 0:
+        log_error(
+            f"No benchmark tasks found for game variant '{game}'. Please ensure that the benchmark_tests/tasks.csv file contains tasks for this game.",
+            parameters,
+        )
+    return game_tasks_df

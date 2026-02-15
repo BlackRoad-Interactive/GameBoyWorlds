@@ -9,7 +9,7 @@ Keeps a record of:
 Provides methods to access these.
 """
 
-from poke_worlds.utils import log_error, load_parameters, log_warn
+from poke_worlds.utils import log_error, load_parameters, log_warn, get_benchmark_tasks
 import os
 from typing import Optional, Union, Type, Dict
 from poke_worlds.emulation.parser import StateParser, DummyParser
@@ -74,6 +74,7 @@ GAME_TO_GB_NAME = {
     "pokemon_crystal": "PokemonCrystal.gbc",
     "pokemon_fools_gold": "PokemonFoolsGold.gbc",
     "pokemon_prism": "PokemonPrism.gbc",
+    "legend_of_zelda": "LegendOfZeldaLinksAwakening.gbc",
     # "zelda_links_awakening": "ZeldaLinksAwakening.gb",
 }
 """ Expected save name for each game. Save the file to <storage_dir_from_config_file>/<game_name>_rom_data/<gb_name>"""
@@ -85,6 +86,7 @@ _STRONGEST_PARSERS: Dict[str, Type[StateParser]] = {
     "pokemon_starbeasts": PokemonStarBeastsStateParser,
     "pokemon_fools_gold": PokemonFoolsGoldStateParser,
     "pokemon_prism": PokemonPrismStateParser,
+    "legend_of_zelda": LegendOfZeldaParser,
 }
 """ Mapping of game names to their corresponding strongest StateParser classes. 
 Unless you have a very good reason, you should always use the STRONGEST possible parser for a given game. 
@@ -126,6 +128,7 @@ AVAILABLE_STATE_TRACKERS: Dict[str, Dict[str, Type[StateTracker]]] = {
     "pokemon_prism": {
         "default": PokemonOCRTracker,
     },
+    "legend_of_zelda": {"default": StateTracker},
 }
 """ Mapping of game names to their available StateTracker classes with string identifiers. """
 
@@ -148,6 +151,7 @@ AVAILABLE_EMULATORS: Dict[str, Dict[str, Type[Emulator]]] = {
     "pokemon_prism": {
         "default": PokemonEmulator,
     },
+    "legend_of_zelda": {"default": Emulator},
 }
 """ Mapping of game names to their available Emulator classes with string identifiers. """
 
@@ -423,3 +427,52 @@ def get_available_init_states(game: str, parameters: Optional[dict] = None) -> l
         f.replace(".state", "") for f in os.listdir(states_dir) if f.endswith(".state")
     ]
     return state_names
+
+
+def get_train_init_states(game: str, parameters: Optional[dict] = None) -> list:
+    """
+    Returns a list of allowed initial states for training agents to play the specified game.
+    This is determined based on the benchmark tasks specified for the game - any state that is a test state for a benchmark task is disallowed as a training initial state.
+
+    Args:
+        game (str): The variant of the Pokemon game (e.g., `pokemon_red`, `pokemon_crystal`).
+        parameters (dict, optional): Additional parameters for configuration.
+
+    Returns:
+        list: A list of available initial state names (without .state extension) that can be used for training.
+    """
+    parameters = load_parameters(parameters)
+    benchmark_tasks_df = get_benchmark_tasks(game, parameters=parameters)
+    test_init_states = benchmark_tasks_df["init_state"].unique().tolist()
+    other_disallowed_states = []
+    for i, row in benchmark_tasks_df.iterrows():
+        others = row["other_disallowed_states"]
+        if others and isinstance(others, str):
+            other_disallowed_states.extend(others.split(","))
+    test_init_states.extend(other_disallowed_states)
+    test_init_states = list(set(test_init_states))
+    available_init_states = get_available_init_states(game, parameters=parameters)
+    train_init_states = []
+    for state in available_init_states:
+        if (
+            state in test_init_states
+            or state.startswith("test_")
+            or "_test_" in state
+            or state.endswith("_test")
+            or state == "test"
+        ):
+            continue
+        train_init_states.append(state)
+    if len(train_init_states) == 0:
+        if parameters["debug_mode"]:
+            log_warn(
+                f"No available training initial states found for game '{game}' after filtering out test states. Returning all available initial states for now, but you should add some training states that are not used as test states or other_disallowed_states in the benchmark tasks.",
+                parameters,
+            )
+            return available_init_states
+        else:
+            log_error(
+                f"No available training initial states found for game '{game}' after filtering out test states. Please ensure that there are some initial states available for training that are not used as test states or other_disallowed_states in the benchmark tasks.",
+                parameters,
+            )
+    return train_init_states
