@@ -432,7 +432,17 @@ def get_train_init_states(game: str, parameters: Optional[dict] = None) -> list:
     test_init_states.extend(other_disallowed_states)
     test_init_states = list(set(test_init_states))
     available_init_states = get_available_init_states(game, parameters=parameters)
-    train_init_states = [s for s in available_init_states if s not in test_init_states]
+    train_init_states = []
+    for state in available_init_states:
+        if (
+            state in test_init_states
+            or state.startswith("test_")
+            or "_test_" in state
+            or state.endswith("_test")
+            or state == "test"
+        ):
+            continue
+        train_init_states.append(state)
     if len(train_init_states) == 0:
         if parameters["debug_mode"]:
             log_warn(
