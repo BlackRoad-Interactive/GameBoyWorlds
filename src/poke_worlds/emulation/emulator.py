@@ -364,6 +364,7 @@ class Emulator:
             init_state (str): Path to the new initial state file.
         """
         if init_state is None:
+            # log_warn(f"No initial state file provided. Using default initial state.", self._parameters)
             return
         if not init_state.endswith(".state"):
             init_state = init_state + ".state"
@@ -374,21 +375,13 @@ class Emulator:
                     f"Initial state file {init_state} does not exist.", self._parameters
                 )
             # try to resolve.
-
-            if states_path not in init_state:
-                potential_path = os.path.join(states_path, init_state)
-                if os.path.exists(potential_path):
-                    init_state = potential_path
-
-        if not os.path.exists(init_state):
-            log_error(
-                f"New initial state file {init_state} does not exist.", self._parameters
-            )
-        if not init_state.endswith(".state"):
-            log_error(
-                f"New initial state file {init_state} is not a .state file.",
-                self._parameters,
-            )
+            potential_path = os.path.join(states_path, init_state)
+            if os.path.exists(potential_path):
+                init_state = potential_path
+            else:
+                log_error(
+                    f"Initial state file {init_state} does not exist.", self._parameters
+                )
         self.init_state = init_state
         log_info(f"Set new initial state file to {self.init_state}", self._parameters)
 
