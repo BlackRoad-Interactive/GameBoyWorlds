@@ -44,6 +44,7 @@ class LowLevelActions(Enum):
     PRESS_BUTTON_A = WindowEvent.PRESS_BUTTON_A
     PRESS_BUTTON_B = WindowEvent.PRESS_BUTTON_B
     PRESS_BUTTON_START = WindowEvent.PRESS_BUTTON_START
+    # PRESS_BUTTON_SELECT = WindowEvent.PRESS_BUTTON_SELECT
 
 
 class ReleaseActions(Enum):
@@ -59,6 +60,7 @@ class ReleaseActions(Enum):
         LowLevelActions.PRESS_BUTTON_A: WindowEvent.RELEASE_BUTTON_A,
         LowLevelActions.PRESS_BUTTON_B: WindowEvent.RELEASE_BUTTON_B,
         LowLevelActions.PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START,
+        # LowLevelActions.PRESS_BUTTON_SELECT: WindowEvent.RELEASE_BUTTON_SELECT,
     }
 
 
@@ -152,6 +154,168 @@ class IDPathCreator:
             self._parameters,
         )
         log_dict(cleared_sessions, parameters=self._parameters)
+
+
+class VideoWriter:
+    def __init__(
+        self,
+        *,
+        session_path: str,
+        output_shape: Tuple[int, int],
+        reduce_resolution: bool,
+        parameters: dict,
+    ):
+        verify_parameters(parameters)
+        self._session_path = session_path
+        self._output_shape = output_shape
+        self._reduce_resolution = reduce_resolution
+        self._parameters = parameters
+        self._frame_writer = None
+        self.video_running = False
+        """ Whether the video writer is currently recording video. """
+        self._button_images = {
+            None: cv2.imread("assets/buttons/idle.png", cv2.IMREAD_UNCHANGED),
+            LowLevelActions.PRESS_ARROW_DOWN: cv2.imread(
+                "assets/buttons/down.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_ARROW_LEFT: cv2.imread(
+                "assets/buttons/left.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_ARROW_RIGHT: cv2.imread(
+                "assets/buttons/right.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_ARROW_UP: cv2.imread(
+                "assets/buttons/up.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_BUTTON_A: cv2.imread(
+                "assets/buttons/a.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_BUTTON_B: cv2.imread(
+                "assets/buttons/b.png", cv2.IMREAD_UNCHANGED
+            ),
+            LowLevelActions.PRESS_BUTTON_START: cv2.imread(
+                "assets/buttons/start.png", cv2.IMREAD_UNCHANGED
+            ),
+            # LowLevelActions.PRESS_BUTTON_SELECT: cv2.imread(
+            #     "assets/buttons/select.png", cv2.IMREAD_UNCHANGED
+            # ),
+        }
+
+    def _get_free_video_id(self) -> str:
+        """
+        Returns a new unique video ID for saving video files.
+
+        Returns:
+            str: A new unique video ID.
+        """
+        base_dir = os.path.join(self._session_path, "videos")
+        videos = os.listdir(base_dir) if os.path.exists(base_dir) else []
+        # all will be something.mp4, if its int.mp4, get the int
+        video_ints = []
+        for video in videos:
+            if video.endswith(".mp4"):
+                video_name = video[:-4]
+                if video_name.isdigit():
+                    video_ints.append(int(video_name))
+        if len(video_ints) == 0:
+            return "0.mp4"
+        return str(max(video_ints) + 1) + ".mp4"
+
+    def start_video(self, video_id: str = None):
+        """
+        Starts recording video of the emulator's screen.
+        Args:
+            video_id (str, optional): Name of the video file to save. If None, a new unique name will be generated.
+        """
+        if video_id is not None:
+            if not isinstance(video_id, str):
+                log_error(
+                    "video_id must be a string (not digits) if provided.",
+                    self._parameters,
+                )
+            if not video_id.endswith(".mp4"):
+                log_error("video_id must end with .mp4 if provided.", self._parameters)
+            if os.path.exists(os.path.join(self._session_path, "videos", video_id)):
+                log_warn(
+                    f"video_id {video_id} already exists. Overwriting...",
+                    self._parameters,
+                )
+        else:
+            video_id = self._get_free_video_id()
+        base_dir = os.path.join(self._session_path, "videos")
+        os.makedirs(base_dir, exist_ok=True)
+        video_path = os.path.join(base_dir, f"{video_id}")
+        self.close_video()
+        self._frame_writer = cv2.VideoWriter(
+            video_path,
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            60,
+            (self._output_shape[0], self._output_shape[1]),
+            isColor=True,
+        )
+        self.video_running = True
+        log_info(f"\nStarted recording video to: {video_path}\n", self._parameters)
+
+    def _get_reduced(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Reduces the resolution of the given frame by a factor of 2 using local mean downscaling.
+        Args:
+            frame (np.ndarray): The frame to reduce the resolution of.
+        Returns:
+            np.ndarray: The reduced resolution frame.
+        """
+        reduced = (downscale_local_mean(frame, (2, 2, 1))).astype(np.uint8)
+        return reduced
+
+    def add_video_frames(
+        self, frames: np.ndarray, pressed_button: Optional[LowLevelActions] = None
+    ):
+        """
+        Adds a list of frame from the emulator to the video being recorded.
+
+        Args:
+            frames (np.ndarray): A stack of frames to add to the video. Shape is [n_frames, height, width, channels].
+        """
+
+        # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape
+        # Create VideoWriter object
+        # breakpoint()
+        button_image = self._button_images[pressed_button]
+        button_size = 50
+        button_offset = 0
+        button_x = self._output_shape[0] - button_size - button_offset
+        button_y = self._output_shape[1] - button_size - button_offset
+        button_image = cv2.resize(button_image, (button_size, button_size))
+        alphas = button_image[:, :, 3] / 255.0
+
+        # breakpoint()
+        for frame in frames:
+            if self._reduce_resolution:
+                frame = self._get_reduced(frame)
+            # expand grayscale frame to 3 channels for video writing
+            treated_frame = np.repeat(frame, 3, axis=2)
+            treated_frame[
+                button_y : button_y + button_size, button_x : button_x + button_size
+            ] = (
+                treated_frame[
+                    button_y : button_y + button_size, button_x : button_x + button_size
+                ]
+                * (1 - alphas[:, :, np.newaxis])
+                + button_image[:, :, :3] * alphas[:, :, np.newaxis]
+            ).astype(
+                np.uint8
+            )
+            self._frame_writer.write(treated_frame)
+        return
+
+    def close_video(self):
+        """
+        Closes the video writer and stops recording video.
+        """
+        if self._frame_writer is not None:
+            self._frame_writer.release()
+            self._frame_writer = None
+        self.video_running = False
 
 
 class Emulator:
@@ -253,10 +417,6 @@ class Emulator:
             max_steps = self._parameters["gameboy_hard_max_steps"]
         self.max_steps = max_steps
         """ Maximum number of steps per episode. """
-        if save_video is None:
-            save_video = self._parameters["gameboy_default_save_video"]
-        self.save_video = save_video
-        """ Whether to save video of the episodes. """
         id_path_creator = IDPathCreator(self._parameters)
         self.session_path = id_path_creator.get_session_path(
             session_name=session_name,
@@ -264,6 +424,7 @@ class Emulator:
             environment_variant=self.get_env_variant(),
         )
         """ Path to the session directory. This is where all artifacts for this session are saved. """
+
         self.act_freq = parameters["gameboy_action_freq"]
         """ Number of emulator ticks per action. Defaults to value specified in config files. """
         self.press_step = parameters["gameboy_press_step"]
@@ -281,17 +442,31 @@ class Emulator:
         self.step_count = 0
         """ Number of steps taken in the current episode. """
         self._reduce_video_resolution = parameters["gameboy_reduce_video_resolution"]
-        pokemon_frame_size = (
+        frame_size = (
             160,
             144,
-        )  # Confirm this is universal if you want other GB games.
-        self.screen_shape = (pokemon_frame_size[0], pokemon_frame_size[1], 1)
+        )
+        self.screen_shape = (frame_size[0], frame_size[1], 1)
         """ Resolution of the rendered game screen """
         if self._reduce_video_resolution:
-            self.output_shape = (pokemon_frame_size[0] // 2, pokemon_frame_size[1] // 2)
+            self.output_shape = (frame_size[0] // 2, frame_size[1] // 2)
         else:
-            self.output_shape = (pokemon_frame_size[0], pokemon_frame_size[1])
+            self.output_shape = (frame_size[0], frame_size[1])
             """ Shape of the output observations. This is the resolution of the rendered screen. """
+
+        if save_video is None:
+            save_video = self._parameters["gameboy_default_save_video"]
+        self.save_video = save_video
+        """ Whether to save video of the episodes. """
+        self.video_writer = None
+        """ Holds the VideoWriter of this Emulator instance """
+        if self.save_video:
+            self.video_writer = VideoWriter(
+                session_path=self.session_path,
+                output_shape=self.output_shape,
+                reduce_resolution=self._reduce_video_resolution,
+                parameters=self._parameters,
+            )
 
         head = "null" if self.headless else "SDL2"
 
@@ -406,8 +581,7 @@ class Emulator:
         self.reset_count += 1
         self.step_count = 0
         self.state_tracker.reset()
-        self.close_video()
-        self._video_text = None
+        self.video_writer.close_video()
         return
 
     def get_current_frame(self) -> np.ndarray:
@@ -421,15 +595,13 @@ class Emulator:
 
     def _update_listeners_after_actions(self, frames: np.ndarray):
         """
-        Updates the video and state tracker after a batch of actions are run on the emulator without step()
+        Updates the state tracker after a batch of actions are run on the emulator without step()
 
         You should *not* call this method when implementing HighLevelActions, instead call step(), track the states at each step, and return the list of transition states.
 
         Args:
             frames (np.ndarray): Frames of shape [n_frames, H, W, C] that contain the frames which elapsed during the run of the actions outside step
         """
-        if self.save_video and self.video_running:
-            self.add_video_frames(frames)
         self.state_tracker.step(frames)
 
     def _get_unique_frames(self, frames: np.ndarray) -> np.ndarray:
@@ -479,7 +651,7 @@ class Emulator:
             # One consequence, however, is that max_steps then becomes a soft limit rather than a hard limit.
 
         if self.save_video and self.step_count == 0:
-            self.start_video()
+            self.video_writer.start_video()
 
         frames = self.run_action_on_emulator(action)
         self.step_count += 1
@@ -525,111 +697,9 @@ class Emulator:
             self._pyboy.tick(self.act_freq, True)
             frames = [self.get_current_frame()]
             frames = np.array(frames)
+        if self.save_video and self.video_writer.video_running:
+            self.video_writer.add_video_frames(frames, pressed_button=action)
         return frames
-
-    def reduce_resolution(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Reduces the resolution of the given frame by a factor of 2 using local mean downscaling.
-        Args:
-            frame (np.ndarray): The frame to reduce the resolution of.
-        Returns:
-            np.ndarray: The reduced resolution frame.
-        """
-        reduced = (downscale_local_mean(frame, (2, 2, 1))).astype(np.uint8)
-        return reduced
-
-    def save_render(self, reduce_res: bool = None):
-        """
-        Saves the current rendered screen of the emulator as a JPEG image in the renders directory.
-
-        Args:
-            reduce_res (bool, optional): Whether to reduce the resolution of the saved image.
-                If None, uses the default setting from the config files.
-        """
-        render_path = os.path.join(
-            self.session_path, "renders", f"step_{self.step_count}.jpeg"
-        )
-        file_makedir(render_path)
-        if reduce_res is None:
-            reduce_res = self._reduce_video_resolution
-        current_frame = self.get_current_frame()
-        if reduce_res:
-            current_frame = self.reduce_resolution(current_frame)
-        plt.imsave(render_path, current_frame[:, :, 0])
-
-    def get_free_video_id(self) -> str:
-        """
-        Returns a new unique video ID for saving video files.
-
-        Returns:
-            str: A new unique video ID.
-        """
-        base_dir = os.path.join(self.session_path, "videos")
-        videos = os.listdir(base_dir) if os.path.exists(base_dir) else []
-        # all will be something.mp4, if its int.mp4, get the int
-        video_ints = []
-        for video in videos:
-            if video.endswith(".mp4"):
-                video_name = video[:-4]
-                if video_name.isdigit():
-                    video_ints.append(int(video_name))
-        if len(video_ints) == 0:
-            return "0.mp4"
-        return str(max(video_ints) + 1) + ".mp4"
-
-    def start_video(self, video_id: str = None):
-        """
-        Starts recording video of the emulator's screen.
-        Args:
-            video_id (str, optional): Name of the video file to save. If None, a new unique name will be generated.
-        """
-        if video_id is not None:
-            if not isinstance(video_id, str):
-                log_error(
-                    "video_id must be a string (not digits) if provided.",
-                    self._parameters,
-                )
-            if not video_id.endswith(".mp4"):
-                log_error("video_id must end with .mp4 if provided.", self._parameters)
-            if os.path.exists(os.path.join(self.session_path, "videos", video_id)):
-                log_warn(
-                    f"video_id {video_id} already exists. Overwriting...",
-                    self._parameters,
-                )
-        else:
-            video_id = self.get_free_video_id()
-        base_dir = os.path.join(self.session_path, "videos")
-        os.makedirs(base_dir, exist_ok=True)
-        video_path = os.path.join(base_dir, f"{video_id}")
-        self.close_video()
-        self.frame_writer = cv2.VideoWriter(
-            video_path,
-            cv2.VideoWriter_fourcc(*"mp4v"),
-            60,
-            (self.output_shape[0], self.output_shape[1]),
-            isColor=True,
-        )
-        self.video_running = True
-        log_info(f"\nStarted recording video to: {video_path}\n", self._parameters)
-
-    def add_video_frames(self, frames: np.ndarray):
-        """
-        Adds a list of frame from the emulator to the video being recorded.
-
-        Args:
-            frames (np.ndarray): A stack of frames to add to the video. Shape is [n_frames, height, width, channels].
-        """
-
-        # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape
-        # Create VideoWriter object
-        # breakpoint()
-        for frame in frames:
-            if self._reduce_video_resolution:
-                frame = self.reduce_resolution(frame)
-            # expand grayscale frame to 3 channels for video writing
-            treated_frame = np.repeat(frame, 3, axis=2)
-            self.frame_writer.write(treated_frame)
-        return
 
     def check_if_done(self):
         """
@@ -638,12 +708,6 @@ class Emulator:
         done = self.step_count >= self.max_steps - 1
         return done
 
-    def close_video(self):
-        """
-        Closes the video writer and stops recording video.
-        """
-        self.video_running = False
-
     def close(self) -> StateTracker:
         """
         Closes the emulator and any associated resources.
@@ -651,7 +715,7 @@ class Emulator:
         """
         self.state_tracker.close()
         self._pyboy.stop(save=False)
-        self.close_video()
+        self.video_writer.close_video()
         self.state_tracker.close()
         # check if session directory is empty, and if so delete it
         if (
