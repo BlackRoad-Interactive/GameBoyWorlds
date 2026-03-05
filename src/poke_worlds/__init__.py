@@ -19,7 +19,7 @@ There are two ways to navigate the documentation:
 
 
 ### Notable API Imports
-** Utils Submodule:**
+**Utils Submodule:**
 * `get_benchmark_tasks`: Function to get benchmark tasks for evaluating agents in different game variants.
 
 **Emulation Submodule:**
